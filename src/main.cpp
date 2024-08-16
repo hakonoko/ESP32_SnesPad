@@ -1,5 +1,5 @@
-// Clock Cycle: 1 2 3   4   5 6 7 8 9 10 11 12 13 14 15 16
-// Button     : B Y Sel Sta U D L R A X  L  R  0  0  0  0 
+// Clock Cycle: 1 2 3  4  5 6 7 8 9 10 11 12 13 14 15 16
+// Button     : B Y Se St U D L R A X  L  R  0  0  0  0 
 
 // 1 : 5V    : White
 // 2 : CLOCK : Yellow
@@ -22,11 +22,15 @@
 // Initialize the OLED display using Arduino Wire:
 SSD1306Wire display(0x3c, 20, 21);   // ADDRESS, SDA, SCL
 
-volatile bool dataarr[16];
+volatile uint16_t buttons;
+//volatile bool dataarr[16];
 volatile int bitcounter = 0;
 
-TaskHandle_t drawButtonsTaskHandle = NULL;
-String buttonNames[] = {"B", "Y", "Sel", "Sta", "U", "D", "L", "R", "A", "X", "L", "R", "0", "0", "0", "0" };
+// TaskHandle_t drawButtonsTaskHandle = NULL;
+// String buttonNames[] = {"B", "Y", "Sel", "Sta", "U", "D", "L", "R", "A", "X", "L", "R", "0", "0", "0", "0" };
+
+// QueueHandle_t xDisplayQueue; // キューのハンドラ
+// uint16_t _temp;
 
 void setupPins(){
   pinMode(SFC_LATCH, INPUT);
@@ -37,48 +41,51 @@ void setupPins(){
 }
 
 // void drawButtons(void *pvParameters){
-//   display.clear();
-//   display.drawString(0, 0, "Hello world");
+//   uint16_t queue_buffer;
+//   while(true){
+//     xQueueReceive(xDisplayQueue, &queue_buffer, portMAX_DELAY);
 
-//   for(int i=0; i < 16; i++){
-//     display.drawString(30, 15*i, buttonNames[i]);
+//     display.clear();
+//     display.drawString(0, 0, "Hello world");
+
+//     for(int i=0; i < 16; i++){
+//       if((buttons >> (16 - i)) & 1){
+//         display.drawString(30, 15*i, buttonNames[i]);
+//       }
+//     }
+//     display.display();
+//     delay(20);  // 1秒に50回ぐらい更新
 //   }
-//   display.display();
 // }
 
 void IRAM_ATTR fastDigitalWrite(bool val, uint8_t pin){
   if(val){
     GPIO_0to31SET_REG = 1 << pin;
-    //GPIO.out_w1ts.out_w1ts = 1 << pin;
   }else{
     GPIO_0to31CLR_REG = 1 << pin;
-    //GPIO.out_w1tc.out_w1tc = 1 << pin;
   }
+}
+
+bool IRAM_ATTR getButton(uint8_t bit){
+  return (buttons >> bit) & 0x1;
 }
 
 void IRAM_ATTR latching() {
   bitcounter = 0;
-  fastDigitalWrite(dataarr[bitcounter], SFC_DATA);
+  fastDigitalWrite(~getButton(16 - bitcounter), SFC_DATA);  // LOWがボタン押した判定なので反転する
+
+  // uint16_t _temp = buttons;
+  // xQueueSendFromISR(xDisplayQueue, &_temp, 0);
 }
 
 void IRAM_ATTR clocking() {
   if (bitcounter > 15) {
     fastDigitalWrite(HIGH, SFC_DATA);
+    
   }else{
     bitcounter++;
-    fastDigitalWrite(dataarr[bitcounter], SFC_DATA);
+    fastDigitalWrite(~getButton(16 - bitcounter), SFC_DATA);  // LOWがボタン押した判定なので反転する
   }
-  
-  // xTaskCreateUniversal(
-  //   drawButtons,
-  //   "DrawButtons",
-  //   8192,
-  //   NULL,
-  //   0,
-  //   &drawButtonsTaskHandle,
-  //   CONFIG_ARDUINO_RUNNING_CORE
-  //   );
-  //drawButtons();
 }
 
 void setup() {
@@ -98,38 +105,23 @@ void setup() {
 
   setupPins();
 
-  // 
   attachInterrupt(SFC_LATCH, latching, RISING);
   attachInterrupt(SFC_CLOCK, clocking, RISING);
 
-  for ( int i = 0; i < 16; i++) {
-    if (i != 4) {
-      dataarr[i] = false;
-    } else {
-      dataarr[i] = true;
-    }
-  }
+  //xDisplayQueue = xQueueCreate(1, sizeof(uint16_t));
+  //xTaskCreate(drawButtons, "DrawButtons", 1024, NULL, 0, NULL);
 }
 
 void loop() {
-  if (!Serial.available()) return;
-  
-  uint8_t buf[2];
-  Serial.readBytes(buf, 2);
-  uint16_t data = (buf[0] << 8) | buf[1];
+  if (Serial.available()){
+    uint8_t buf[2];
+    Serial.readBytes(buf, 2);
 
-  Serial.println("ValueBIN: " + String(data, BIN));
-  Serial.println("ValueHEX: " + String(data, HEX));
+    buttons = (buf[0] << 8) | buf[1];
 
-  for (size_t i = 0; i < 16; i++)
-  {
-    /* code */
-    if ((data >> 15 - i) == 1) {
-      dataarr[i] = false;
-    } else {
-      dataarr[i] = true;
-    }
+    Serial.println("ValueBIN: " + String(buttons, BIN));
+    Serial.println("ValueHEX: " + String(buttons, HEX));
+
+    Serial.flush();
   }
-
-  Serial.flush();
 }
