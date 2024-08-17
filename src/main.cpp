@@ -17,7 +17,7 @@
 
 #define SFC_CLOCK   7
 #define SFC_LATCH   6
-#define SFC_DATA    4
+#define SFC_DATA    5
 
 // Initialize the OLED display using Arduino Wire:
 SSD1306Wire display(0x3c, 20, 21);   // ADDRESS, SDA, SCL
@@ -67,24 +67,26 @@ void IRAM_ATTR fastDigitalWrite(bool val, uint8_t pin){
 }
 
 bool IRAM_ATTR getButton(uint8_t bit){
-  return (buttons >> bit) & 0x1;
+  return !(buttons & (1 << bit));
 }
 
 void IRAM_ATTR latching() {
+  //ulong timer = micros();
   bitcounter = 0;
-  fastDigitalWrite(~getButton(16 - bitcounter), SFC_DATA);  // LOWがボタン押した判定なので反転する
+  fastDigitalWrite((~buttons & (1 << (16 - bitcounter))), SFC_DATA);  // LOWがボタン押した判定なので反転する
+  //Serial.println(micros() - timer);
 
   // uint16_t _temp = buttons;
   // xQueueSendFromISR(xDisplayQueue, &_temp, 0);
 }
 
 void IRAM_ATTR clocking() {
-  if (bitcounter > 15) {
+  if (bitcounter > 12) {
     fastDigitalWrite(HIGH, SFC_DATA);
     
   }else{
     bitcounter++;
-    fastDigitalWrite(~getButton(16 - bitcounter), SFC_DATA);  // LOWがボタン押した判定なので反転する
+    fastDigitalWrite((~buttons & (1 << (16 - bitcounter))), SFC_DATA);  // LOWがボタン押した判定なので反転する
   }
 }
 
