@@ -1,5 +1,5 @@
-// Clock Cycle: 1 2 3  4  5 6 7 8 9 10 11 12 13 14 15 16
-// Button     : B Y Se St U D L R A X  L  R  0  0  0  0 
+// Clock Cycle: 1 2 3   4   5 6 7 8 9 10 11 12 13 14 15 16
+// Button     : B Y Sel Sta U D L R A X  L  R  0  0  0  0 
 
 // 1 : 5V    : White
 // 2 : CLOCK : Yellow
@@ -26,6 +26,8 @@ volatile uint16_t buttons;
 //volatile bool dataarr[16];
 volatile int bitcounter = 0;
 
+volatile uint16_t buttons = 0;
+
 // TaskHandle_t drawButtonsTaskHandle = NULL;
 // String buttonNames[] = {"B", "Y", "Sel", "Sta", "U", "D", "L", "R", "A", "X", "L", "R", "0", "0", "0", "0" };
 
@@ -41,28 +43,22 @@ void setupPins(){
 }
 
 // void drawButtons(void *pvParameters){
-//   uint16_t queue_buffer;
-//   while(true){
-//     xQueueReceive(xDisplayQueue, &queue_buffer, portMAX_DELAY);
+//   display.clear();
+//   display.drawString(0, 0, "Hello world");
 
-//     display.clear();
-//     display.drawString(0, 0, "Hello world");
-
-//     for(int i=0; i < 16; i++){
-//       if((buttons >> (16 - i)) & 1){
-//         display.drawString(30, 15*i, buttonNames[i]);
-//       }
-//     }
-//     display.display();
-//     delay(20);  // 1秒に50回ぐらい更新
+//   for(int i=0; i < 16; i++){
+//     display.drawString(30, 15*i, buttonNames[i]);
 //   }
+//   display.display();
 // }
 
 void IRAM_ATTR fastDigitalWrite(bool val, uint8_t pin){
   if(val){
     GPIO_0to31SET_REG = 1 << pin;
+    //GPIO.out_w1ts.out_w1ts = 1 << pin;
   }else{
     GPIO_0to31CLR_REG = 1 << pin;
+    //GPIO.out_w1tc.out_w1tc = 1 << pin;
   }
 }
 
@@ -83,7 +79,6 @@ void IRAM_ATTR latching() {
 void IRAM_ATTR clocking() {
   if (bitcounter > 12) {
     fastDigitalWrite(HIGH, SFC_DATA);
-    
   }else{
     bitcounter++;
     fastDigitalWrite((~buttons & (1 << (16 - bitcounter))), SFC_DATA);  // LOWがボタン押した判定なので反転する
