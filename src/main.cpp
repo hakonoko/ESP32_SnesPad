@@ -8,6 +8,7 @@
 // 5 : GND   : Brown
 
 #include <Arduino.h>
+#include "ESP32Wiimote.h"
 
 #define GPIO_0to31SET_REG   *((volatile unsigned long *)GPIO_OUT_W1TS_REG)
 #define GPIO_0to31CLR_REG   *((volatile unsigned long *)GPIO_OUT_W1TC_REG)
@@ -16,9 +17,13 @@
 #define SFC_LATCH   6
 #define SFC_DATA    4
 
+
 volatile uint16_t buttons = 0;
 //volatile bool dataarr[16];
 volatile int bitcounter = 0;
+
+static bool logging = true;
+ESP32Wiimote wiimote;
 
 // TaskHandle_t drawButtonsTaskHandle = NULL;
 // String buttonNames[] = {"B", "Y", "Sel", "Sta", "U", "D", "L", "R", "A", "X", "L", "R", "0", "0", "0", "0" };
@@ -35,7 +40,7 @@ void setupPins(){
 }
 
 void IRAM_ATTR fastDigitalWrite(bool val, uint8_t pin){
-  if(val){
+  if(val){        
     GPIO_0to31SET_REG = 1 << pin;
     //GPIO.out_w1ts.out_w1ts = 1 << pin;
   }else{
@@ -71,6 +76,11 @@ void setup() {
 
   setupPins();
 
+  wiimote.init();
+  Serial.printf("wiimote init Complete.");
+  if (! logging)
+      wiimote.addFilter(ACTION_IGNORE, FILTER_ACCEL); // optional
+
   attachInterrupt(SFC_LATCH, latching, RISING);
   attachInterrupt(SFC_CLOCK, clocking, RISING);
 
@@ -88,5 +98,41 @@ void loop() {
     Serial.println("ValueHEX: " + String(buttons, HEX));
 
     Serial.flush();
+  }
+
+  Serial.printf("wiimote...");
+  wiimote.task();
+
+  if (wiimote.available() > 0) 
+  {
+    Serial.printf("wiimote available");
+
+    ButtonState  button  = wiimote.getButtonState();
+    AccelState   accel   = wiimote.getAccelState();
+    NunchukState nunchuk = wiimote.getNunchukState();
+
+    buttons = 0;
+
+    if (logging)
+    {
+      buttons   |= (button & BUTTON_A)     ? 0x0080 : 0x0000;
+      buttons   |= (button & BUTTON_B)     ? 0x0040 : 0x0000;
+      buttons   |= (button & BUTTON_C)     ? 0x0000 : 0x0000;
+      buttons   |= (button & BUTTON_Z)     ? 0x0000 : 0x0000;
+      buttons   |= (button & BUTTON_ONE)   ? 0x8000 : 0x0000;
+      buttons   |= (button & BUTTON_TWO)   ? 0x4000 : 0x0000;
+      buttons   |= (button & BUTTON_MINUS) ? 0x2000 : 0x0000;
+      buttons   |= (button & BUTTON_PLUS)  ? 0x1000 : 0x0000;
+      buttons   |= (button & BUTTON_HOME)  ? 0x0000 : 0x0000;
+      buttons   |= (button & BUTTON_LEFT)  ? 0x0200 : 0x0000;
+      buttons   |= (button & BUTTON_RIGHT) ? 0x0100 : 0x0000;
+      buttons   |= (button & BUTTON_UP)    ? 0x0800 : 0x0000;
+      buttons   |= (button & BUTTON_DOWN)  ? 0x0400 : 0x0000;
+
+      // Serial.printf("button: %05x = ", (int)button);
+      Serial.printf(", wiimote.axis: %3d/%3d/%3d", accel.xAxis, accel.yAxis, accel.zAxis);
+      // Serial.printf(", nunchuk.axis: %3d/%3d/%3d", nunchuk.xAxis, nunchuk.yAxis, nunchuk.zAxis);
+      // Serial.printf(", nunchuk.stick: %3d/%3d\n", nunchuk.xStick, nunchuk.yStick);
+    }
   }
 }
